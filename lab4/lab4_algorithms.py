@@ -32,7 +32,7 @@ def schur_decomposition_power_method(A: np.ndarray, max_iter: int=50, tol=1e-8):
         
         U = U @ U_ext
         R = U_ext.T @ R @ U_ext
-    return U, R
+    return R, U
 
 def orthogonal_iteration(A: np.ndarray, p=None, max_iter: int=50, tol=1e-8):
     # p - количество искомых собственных значений
@@ -58,13 +58,13 @@ def orthogonal_iteration(A: np.ndarray, p=None, max_iter: int=50, tol=1e-8):
     return eigvals, Q
 
 
-def qr_algorithm_with_shifts(A: np.ndarray, max_iter=50):
+def qr_algorithm_with_shifts(A: np.ndarray, max_iter: int=50):
     n = A.shape[0]
     H, Q = hessenberg(A, calc_q=True)
     R_k = H
     
     for k in range(max_iter):
-        # Выбор сдвига (элемент a_nn)
+        # Выбор сдвига (элемент r_nn)
         shift = R_k[-1, -1]
 
         Q_k, R_k = qr(H - shift * np.eye(n))
