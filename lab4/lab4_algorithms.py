@@ -77,21 +77,11 @@ def qr_algorithm_with_shifts(A: np.ndarray, max_iter: int=50):
 
 
 def svd_via_schur(A: np.ndarray, tol=1e-10):
-    """
-    Вычисление SVD через разложение Шура без явного вычисления AA^T/A^TA
-    
-    Параметры:
-        A : array_like - входная матрица (m x n)
-        tol : float - допуск сходимости
-        
-    Возвращает:
-        U, S, V : сингулярные векторы и значения
-    """
     m, n = A.shape
     
     # Шаг 1: Приведение к бидиагональной форме
     # (Здесь для простоты используем встроенную функцию)
-    B, U, V = bidiagonalize(A)
+    B, Ut, V = bidiagonalize(A)
     
     # Шаг 2: Построение блочной матрицы
     C = np.zeros((m+n, m+n))
@@ -99,37 +89,55 @@ def svd_via_schur(A: np.ndarray, tol=1e-10):
     C[m:, :m] = B.T
     
     # Шаг 3: Разложение Шура для блочной матрицы
-    T, Q = schur(C)
+    S, Q = schur(C)
     
     # Шаг 4: Извлечение сингулярных значений
-    S = np.abs(np.diag(T)[:min(m,n)])
-    S.sort()[::-1]  # Сортировка по убыванию
+    # S = np.abs(np.diag(T)[:min(m,n)])
+    # S.sort()[::-1]  # Сортировка по убыванию
     
     # Шаг 5: Извлечение сингулярных векторов
-    U = U @ Q[:m, :m]
+    U = Ut @ Q[:m, :m]
     V = V @ Q[m:, :n]
     
     return U, S, V.T
 
-def bidiagonalize(A: np.ndarray):
-    """Приведение к бидиагональной форме (упрощенная реализация)"""
-    m, n = A.shape
-    U = np.eye(m)
-    V = np.eye(n)
+def householder_vector(x: np.ndarray):
+    sign = -1 if x[0] >= 0 else 1
+    v = x.copy()
+    alpha = np.linalg.norm(x)
+    if alpha == 0:
+        beta = 0
+    else:
+        v[0] = v[0] - sign * alpha
+        v = v / np.linalg.norm(v)
+        beta = 2
+    return v, beta
+
+def bidiagonalize(A):
+    m, n = A.shape # m >= n should be
     B = A.copy()
+    Ut = np.eye(m)
+    V = np.eye(n)
     
-    for i in range(min(m,n)):
-        # Преобразование Хаусхолдера слева
-        x = B[i:, i]
-        h = np.eye(m-i) - 2*np.outer(x,x)/np.dot(x,x)
-        B[i:, i:] = h @ B[i:, i:]
-        U[:, i:] = U[:, i:] @ h.T
+    for k in range(min(m, n)):
+        # Левый преобразователь Хаусхолдера (столбец k)
+        if k < m:
+            x = B[k:, k]
+            if np.linalg.norm(x[1:]) > 0:
+                v, beta = householder_vector(x)
+                # Применяем преобразование к B
+                B[k:, k:] = B[k:, k:] - beta * np.outer(v, v @ B[k:, k:])
+                # Аккумулируем преобразование в Ut
+                Ut[k:, :] = Ut[k:, :] - beta * np.outer(v, v @ Ut[k:, :])
         
-        if i < n-2:
-            # Преобразование Хаусхолдера справа
-            x = B[i, i+1:]
-            h = np.eye(n-i-1) - 2*np.outer(x,x)/np.dot(x,x)
-            B[i:, i+1:] = B[i:, i+1:] @ h.T
-            V[i+1:, :] = h @ V[i+1:, :]
+        # Правый преобразователь Хаусхолдера (строка k)
+        if k < n - 2:
+            x = B[k, k+1:]
+            if np.linalg.norm(x[1:]) > 0:
+                v, beta = householder_vector(x)
+                # Применяем преобразование к B
+                B[k:, k+1:] = B[k:, k+1:] - beta * np.outer(B[k:, k+1:] @ v, v)
+                # Аккумулируем преобразование в V
+                V[k+1:, :] = V[k+1:, :] - beta * np.outer(v, v @ V[k+1:, :])
     
-    return B, U, V
+    return B, Ut, V
