@@ -1,106 +1,98 @@
 import numpy as np
 from scipy.linalg import norm, qr, hessenberg, schur
 
-def power_iteration(A: np.ndarray, max_iter: int=50, tol=1e-8):
+def power_iteration_classic(A: np.ndarray, max_iter: int=50):
     x_n = np.random.rand(A.shape[1])
     x_n = x_n / norm(x_n)
     for _ in range(max_iter):
         x_n1 = np.dot(A, x_n)
         eigval = norm(x_n1)
         x_n1_norm = x_n1 / eigval
-        if norm(x_n1_norm - x_n) < tol:
-            break
         x_n = x_n1_norm
     return eigval, x_n # eigenvalue, eigenvector
 
-def schur_decomposition_power_method(A: np.ndarray, max_iter: int=50, tol=1e-8):
-    n = A.shape[0]
-    U = np.eye(n)
-    R = A.copy()
-    for k in range(n-1):
-        # 1. Используем степенной метод для нахождения k-го собственного вектора
-        _, v = power_iteration(R[k:, k:], max_iter=max_iter, tol=tol)
-        
-        # 2. Дополняем до ортонормированного базиса (ортогонализация с помощью QR-разложения)
-        V = np.eye(n-k)
-        V[:, 0] = v
-        U_k, _ = qr(V)
-        
-        # 3. Преобразование подобия
-        U_ext = np.eye(n)
-        U_ext[k:, k:] = U_k
-        
-        U = U @ U_ext
-        R = U_ext.T @ R @ U_ext
-    return R, U
+def power_iteration_with_atol(A: np.ndarray, max_iter: int=50, atol=1e-8):
+    x_n, w_n = np.random.rand(A.shape[1]), np.random.rand(A.shape[0])
+    x_n = x_n / norm(x_n)
+    w_n = w_n / norm(w_n)
+    for _ in range(max_iter):
+        x_n1, w_n1 = np.dot(A, x_n), np.dot(A.T, w_n)
+        eigval = norm(x_n1)
+        x_n, w_n = x_n1 / eigval, w_n1 / norm(w_n1)
+        r_n, s_n = norm(np.dot(A, x_n)-eigval*x_n), np.inner(w_n, x_n)
+        if r_n / s_n < atol:
+            break
+    return eigval, x_n # eigenvalue, eigenvector
 
-def orthogonal_iteration(A: np.ndarray, p=None, max_iter: int=50, tol=1e-8):
+def orthogonal_iteration(A: np.ndarray, p=None, max_iter: int=50):
     # p - количество искомых собственных значений
     n = A.shape[0]
     if p == None:
         p = n
-    Q = np.random.randn(n, p)
-    Q, _ = qr(Q, mode='economic')
-    
+    Q, _ = qr(np.random.randn(n, p), mode='economic')
     for _ in range(max_iter):
         Z = A @ Q
         Q_new, _ = qr(Z, mode='economic')
-        
-        err = np.linalg.norm(Q_new - Q, ord='fro')
-        if err < tol:
-            break
-            
         Q = Q_new
-
     R = Q.T @ A @ Q
     eigvals = np.diag(R)
-    
     return eigvals, Q
 
+def schur_decomposition_power_method(A: np.ndarray, max_iter: int=50):
+    assert A.shape[0] == A.shape[1], "A has to be a square matrix"
+    n = A.shape[0]
+    Q = np.eye(n)
+    for _ in range(max_iter):
+        Z = np.dot(A, Q)
+        Q, R = qr(Z)
+    return R, Q
 
-def qr_algorithm_with_shifts(A: np.ndarray, max_iter: int=50):
+def qr_algorithm_no_shifts(A: np.ndarray, max_iter: int=50):
+    assert A.shape[0] == A.shape[1], "A has to be a square matrix"
     n = A.shape[0]
     H, Q = hessenberg(A, calc_q=True)
     R_k = H
-    
-    for k in range(max_iter):
-        # Выбор сдвига (элемент r_nn)
-        shift = R_k[-1, -1]
-
-        Q_k, R_k = qr(H - shift * np.eye(n))
-
-        H = R_k @ Q_k + shift * np.eye(n)
-
+    for _ in range(max_iter):
+        Q_k, R_k = qr(H)
+        H = R_k @ Q_k
         Q = Q @ Q_k
-    
     return H, Q
 
+def qr_algorithm_with_shifts(A: np.ndarray, max_iter: int=50):
+    assert A.shape[0] == A.shape[1], "A has to be a square matrix"
+    n = A.shape[0]
+    H, Q = hessenberg(A, calc_q=True)
+    R_k = H
+    for _ in range(max_iter):
+        # Выбор сдвига (элемент r_nn)
+        shift = R_k[-1, -1]
+        Q_k, R_k = qr(H - shift * np.eye(n))
+        H = R_k @ Q_k + shift * np.eye(n)
+        Q = Q @ Q_k
+    return H, Q
 
-def svd_via_schur(A: np.ndarray, tol=1e-10):
+def svd_via_schur2(A: np.ndarray):
     m, n = A.shape
-    
-    # Шаг 1: Приведение к бидиагональной форме
-    # (Здесь для простоты используем встроенную функцию)
-    B, Ut, V = bidiagonalize(A)
-    
-    # Шаг 2: Построение блочной матрицы
+    # вот сюда бы еще бидиагонализацию A
     C = np.zeros((m+n, m+n))
-    C[:m, m:] = B
-    C[m:, :m] = B.T
+    C[:m, m:] = A
+    C[m:, :m] = A.T
     
-    # Шаг 3: Разложение Шура для блочной матрицы
-    S, Q = schur(C)
+    S_full, Q = schur(C)
+    col_idx = np.argsort(np.diag(S_full))[::-1]
+    s_vals = np.diag(S_full)[col_idx[:min(n, m)]]
+    S = np.zeros(shape=(m, n))
+    S[:min(m, n), :min(m, n)] = np.diag(s_vals)
+    singular_vecs = Q[:, col_idx[:-min(n, m)]]
+    U = singular_vecs[:m, :m]
+    U /= np.linalg.norm(singular_vecs[:m, :m], axis=0)
+    V = singular_vecs[m:, :n]
+    V /= np.linalg.norm(singular_vecs[m:, :n], axis=0)
     
-    # Шаг 4: Извлечение сингулярных значений
-    # S = np.abs(np.diag(T)[:min(m,n)])
-    # S.sort()[::-1]  # Сортировка по убыванию
-    
-    # Шаг 5: Извлечение сингулярных векторов
-    U = Ut @ Q[:m, :m]
-    V = V @ Q[m:, :n]
-    
-    return U, S, V.T
+    return U, S, V.T, s_vals
 
+
+#### Эта часть пока не пошла в ход (для улучшения SVD) --------------------------------------------------------------
 def householder_vector(x: np.ndarray):
     sign = -1 if x[0] >= 0 else 1
     v = x.copy()
