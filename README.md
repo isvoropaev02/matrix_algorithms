@@ -1,13 +1,21 @@
-# Итоговые версии лабораторных работ.
+# Выполненные лабораторные работы по курсу "Матричные вычисления"
 
-**ЛР-1 -** [ссылка](lab1/main_lab1.ipynb)
+**ЛР-1 (профилирование, jit-компиляция):**
 
-**ЛР-2 -** [ссылка](lab2/main_lab2.ipynb)
+- [ссылка на jupyter notebook](lab1/main_lab1.ipynb)
 
-**ЛР-3:**
+**ЛР-2 (параллельные вычисления, numba-cuda):**
 
-Репозиторий: https://github.com/isvoropaev02/matrix_lib
+- [ссылка на jupyter notebook](lab2/main_lab2.ipynb)
 
-Пакет на Pypi: https://test.pypi.org/project/matrix-lib/
+**ЛР-3 (python lib, uv, pypi):**
 
-**ЛР-4 -** [ссылка](lab4/lab4schur.ipynb)
+- Репозиторий: https://github.com/isvoropaev02/matrix_lib
+
+- Пакет на Pypi: https://test.pypi.org/project/matrix-lib/
+
+**ЛР-4 (разложение Шура, QR, SVD):**
+
+- [ссылка на jupyter notebook](lab4/lab4schur.ipynb)
+
+- [Реализованные алгоритмы](lab4/lab4_algorithms.py)
