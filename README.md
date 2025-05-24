@@ -8,6 +8,8 @@
 
 - [ссылка на jupyter notebook](lab2/main_lab2.ipynb)
 
+- [резервная ссылка на ноутбук с результатами](https://colab.research.google.com/drive/1nxTgjtEFre4VVR1AFwyEIC21dkWT4oPx)
+
 **ЛР-3 (python lib, uv, pypi):**
 
 - Репозиторий: https://github.com/isvoropaev02/matrix_lib

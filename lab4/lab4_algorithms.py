@@ -15,14 +15,15 @@ def power_iteration_with_atol(A: np.ndarray, max_iter: int=50, atol=1e-8):
     x_n, w_n = np.random.rand(A.shape[1]), np.random.rand(A.shape[0])
     x_n = x_n / norm(x_n)
     w_n = w_n / norm(w_n)
-    for _ in range(max_iter):
+    for k in range(max_iter):
         x_n1, w_n1 = np.dot(A, x_n), np.dot(A.T, w_n)
         eigval = norm(x_n1)
         x_n, w_n = x_n1 / eigval, w_n1 / norm(w_n1)
         r_n, s_n = norm(np.dot(A, x_n)-eigval*x_n), np.inner(w_n, x_n)
         if r_n / s_n < atol:
             break
-    return eigval, x_n # eigenvalue, eigenvector
+    delta = r_n / s_n
+    return eigval, x_n, k, delta # eigenvalue, eigenvector, total iterations, abs_error_est
 
 def orthogonal_iteration(A: np.ndarray, p=None, max_iter: int=50):
     # p - количество искомых собственных значений
