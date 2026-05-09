@@ -170,6 +170,18 @@ def invert_from_chol_dec(L, return_counts=False):
     return (invT, cnt) if return_counts else invT
 
 
+def chol_dec_th(n=8):
+    return OpCount(rmul=(2 * (n - 1) * (2 * n + 1)), radd=(2 * (n - 1) * (2 * n + 1)), rdiv=(2 * (n**2 + n - 1)), rsqrt=n)
+
+
+def solve_chol_th(n=8):
+    return OpCount(rmul=(4 * n * (n - 1)), radd=(4 * n * (n - 1)), rdiv=(4 * n), rsqrt=0)
+
+
+def inv_chol_th(n=8):
+    return OpCount(rmul=(2 * n**2 * (n + 1)), radd=(n * (n + 1) * (2 * n + 1)), rdiv=(n * (n + 1)), rsqrt=0)
+
+
 def demo(n=8):
     # Positive-definite Hermitian Toeplitz example:
     # c[k] = rho^k * exp(i phi k), |rho| < 1.
@@ -197,9 +209,9 @@ def demo(n=8):
     print("Solution relative_error: ", x_rel_err)
     print("Invertion relative_error: ", inv_rel_err)
     print("n =", n)
-    print("Cholesky counts:", chol_counts)
-    print("Substitutions counts:", subst_counts)
-    print("Inversion counts:", inv_counts)
+    print("Cholesky counts. true: ", chol_counts, " | theory: ", chol_dec_th(n))
+    print("Substitutions counts. true: ", subst_counts, " | theory: ", solve_chol_th(n))
+    print("Inversion counts. true: ", inv_counts, " | theory: ", inv_chol_th(n))
 
 
 if __name__ == "__main__":
