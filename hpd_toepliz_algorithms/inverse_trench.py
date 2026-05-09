@@ -2,7 +2,7 @@ import numpy as np
 from utilities import OpCount, hermitian_toeplitz
 
 
-def trench_inverse(c, return_counts=False):
+def inverse_trench(c, return_counts=False):
     """
     Trench algorithm for inverse of Hermitian positive-definite Toeplitz matrix.
     Returns the full inverse matrix T^{-1} in O(n^2) operations.
@@ -82,7 +82,7 @@ def demo(n=8):
     T = hermitian_toeplitz(c)
 
     # Trench inverse
-    T_inv_trench, trench_counts = trench_inverse(c, return_counts=True)
+    T_inv_trench, trench_counts = inverse_trench(c, return_counts=True)
     T_inv_exact = np.linalg.inv(T)
     trench_rel_err = np.linalg.norm(T_inv_trench - T_inv_exact) / np.linalg.norm(T_inv_exact)
 

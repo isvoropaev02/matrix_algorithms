@@ -2,7 +2,7 @@ import numpy as np
 from utilities import OpCount, hermitian_toeplitz
 
 
-def levinson_hermitian_solve(c, b, return_counts=False):
+def solve_levinson(c, b, return_counts=False):
     """Levinson-Durbin solver for Hermitian positive-definite Toeplitz T x = b."""
     c = np.asarray(c, dtype=np.complex128)
     b = np.asarray(b, dtype=np.complex128)
@@ -80,7 +80,7 @@ def demo(n=8):
     # Levinson solve for a random right-hand side
     rng = np.random.default_rng(123)
     b = rng.normal(size=n) + 1j * rng.normal(size=n)
-    x, lev_counts = levinson_hermitian_solve(c, b, return_counts=True)
+    x, lev_counts = solve_levinson(c, b, return_counts=True)
     solve_rel_err = np.linalg.norm(T @ x - b) / np.linalg.norm(b)
     x_ref = np.linalg.solve(T, b)
     lev_ref_err = np.linalg.norm(x - x_ref) / np.linalg.norm(x_ref)
