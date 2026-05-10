@@ -182,7 +182,7 @@ def qr_inv_complexity_th(n=8):
     return OpCount(
         rmul=2 * n**2 * (n - 1),
         radd=2 * n**2 * (n - 1),
-        rdiv=2 * n**2,
+        rdiv=2 * n**2,  # можно убрать квадрат
         rsqrt=0,
     )
 
