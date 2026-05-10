@@ -72,14 +72,14 @@ def qr_householder(A):
         # Q_new = Q_old - tau * (Q_old[:, k:] @ v) @ v^H
         # Сначала вычисляем w = Q[:, k:] @ v  (вектор длины m)
         # Q[:, k:] имеет размер m x L, v длины L
-        w = Q[:, k:] @ v  # (m, L) * (L,) -> (m,)
-        CNT_GLOB.rmul += 4 * m * L
+        w = tau * Q[:, k:] @ v  # (m, L) * (L,) -> (m,)
+        CNT_GLOB.rmul += 4 * m * L + 2 * m
         CNT_GLOB.radd += 4 * m * L
         # Затем вычитаем tau * outer(w, conj(v))
-        Q[:, k:] = Q[:, k:] - tau * np.outer(w, v.conj())
-        CNT_GLOB.rmul += 6 * m * L
-        CNT_GLOB.radd += 6 * m * L
-
+        # Q[:, k:] = Q[:, k:] - tau * np.outer(w, v.conj())
+        Q[:, k:] = Q[:, k:] - np.outer(w, v.conj())
+        CNT_GLOB.rmul += 4 * m * L
+        CNT_GLOB.radd += 4 * m * L
     return Q, R
 
 
@@ -108,60 +108,151 @@ def make_R_diag_real(Q, R):
     return Q_new, R_new
 
 
-# ================================================
-# Тест для заданной матрицы 2x2
-# A = np.array([[3 + 3j, -1j], [1 + 2j, 2 + 4j]], dtype=np.complex128)
-# A = np.array([[2 + 6j, 2 - 1j], [1 + 2j, 1 - 0.5j]], dtype=np.complex128)
-# A = np.array([[2 + 6j, 2 - 1j, 2], [1 + 2j, 1 - 0.5j, -1 - 3j], [0, -0.2j, 1 - 0.2j]], dtype=np.complex128)
-# A = np.random.randint(low=-5, high=5, size=(7, 7))
+def solve_from_qr(Q, R, b, return_counts=False):
+    """
+    Solve A x = b with A = Q R.
+    y = Q^H b,   then solve R x = y by back substitution.
+    """
+    n = Q.shape[0]
+    cnt = OpCount()
+    # y = Q^H @ b
+    y = np.zeros(n, dtype=np.complex128)
+    for i in range(n):
+        s = 0.0j
+        for j in range(n):
+            s += np.conj(Q[j, i]) * b[j]  # (Q^H)_{i,j} = conj(Q[j,i])
+            cnt.rmul += 4
+            cnt.radd += 4
+        y[i] = s
+
+    # back substitution R x = y  (R upper triangular, diagonal is real)
+    x = np.zeros(n, dtype=np.complex128)
+    for i in range(n - 1, -1, -1):
+        s = y[i]
+        for j in range(i + 1, n):
+            s -= R[i, j] * x[j]
+            cnt.rmul += 4
+            cnt.radd += 4
+        x[i] = s / R[i, i].real
+        cnt.rdiv += 2
+    return (x, cnt) if return_counts else x
 
 
-def demo(n=8):
-    rho = 0.80
+def invert_from_qr_direct(Q, R, return_counts=False):
+    """
+    Compute A^{-1} by solving R * X = Q^H for X, column by column.
+    R is upper triangular with real non-negative diagonal.
+    """
+    n = Q.shape[0]
+    QH = Q.conj().T
+    invA = np.empty((n, n), dtype=np.complex128)
+    cnt = OpCount()
+
+    for j in range(n):  # для каждого столбца правой части
+        x = np.zeros(n, dtype=np.complex128)
+        # обратный ход: R x = (столбец j матрицы Q^H)
+        for i in range(n - 1, -1, -1):
+            s = QH[i, j]
+            for k in range(i + 1, n):
+                s -= R[i, k] * x[k]
+                cnt.rmul += 4  # комплексное умножение
+                cnt.radd += 4  # комплексное вычитание + сложения внутри умножения
+            # деление на вещественную диагональ
+            x[i] = s / R[i, i].real
+            cnt.rdiv += 2  # комплексное число / вещественное
+        invA[:, j] = x
+
+    return (invA, cnt) if return_counts else invA
+
+
+def qr_dec_complexity_th(n=8):
+    return OpCount(
+        rmul=(20 * n**3 + 45 * n**2 + 37 * n) // 3,
+        radd=(20 * n**3 + 33 * n**2 + 25 * n) // 3,
+        rdiv=5 * n,
+        rsqrt=3 * n,
+    )
+
+
+def qr_lsea_complexity_th(n=8):
+    return OpCount(rmul=6 * n**2 - 2 * n, radd=6 * n**2 - 2 * n, rdiv=2 * n, rsqrt=0)
+
+
+def qr_inv_complexity_th(n=8):
+    return OpCount(
+        rmul=2 * n**2 * (n - 1),
+        radd=2 * n**2 * (n - 1),
+        rdiv=2 * n**2,
+        rsqrt=0,
+    )
+
+
+def demo(n=8, display_matrix=False):
+    rho = 0.84
     phi = 0.37
     c = np.array(
         [rho**k * np.exp(1j * phi * k) for k in range(n)],
         dtype=np.complex128,
     )
+    # A = np.array([[3 + 3j, -1j], [1 + 2j, 2 + 4j]], dtype=np.complex128)
     A = hermitian_toeplitz(c)
 
-    print("Исходная матрица A:")
-    print(A, "\n")
-
-    # Наше разложение
+    # decomposition
     Q, R = qr_householder(A)
-    print("=== Наше QR (стандартное, диагональ R комплексная) ===")
-    print("Q:")
-    print(Q)
-    print("R:")
-    print(R)
-    print("Q^H Q (проверка унитарности):")
-    print(np.round(Q.conj().T @ Q, 14))
-    print("A - Q @ R (норма):", np.linalg.norm(A - Q @ R), "\n")
-
-    # Приведение к вещественной диагонали
     Q_real, R_real = make_R_diag_real(Q, R)
-    print("=== После приведения к вещественной диагонали R ===")
-    print("Q_real:")
-    print(Q_real)
-    print("R_real:")
-    print(R_real)
-    print(np.max(np.abs(A - Q_real @ R_real)))
-
-    # Сравнение с numpy
     Q_np, R_np = np.linalg.qr(A)
-    print("\n=== numpy.linalg.qr ===")
-    print("Q_np:")
-    print(Q_np)
-    print("R_np:")
-    print(R_np)
+
+    # inversion
+    A_inv_qr, inv_qr_counts = invert_from_qr_direct(Q_real, R_real, return_counts=True)
+    A_inv_ref = np.linalg.inv(A)
+    inv_rel_err = np.linalg.norm(A_inv_qr - A_inv_ref) / np.linalg.norm(A_inv_ref)
+    # inv_err = np.max(np.abs(A_inv_qr - A_inv_ref))
+
+    # lsae
+    rng = np.random.default_rng(1)
+    b = rng.normal(size=n) + 1j * rng.normal(size=n)
+    x, lsae_qr_counts = solve_from_qr(Q_real, R_real, b, return_counts=True)
+    x_ref = np.linalg.solve(A, b)
+    lsae_rel_err = np.linalg.norm(x - x_ref) / np.linalg.norm(x_ref)
+    # lsae_err = np.max(np.abs(x - x_ref))
+
+    if display_matrix:
+        print("Исходная матрица A:")
+        print(A, "\n")
+
+        print("=== Наше QR (стандартное, диагональ R комплексная) ===")
+        print("Q:")
+        print(Q)
+        print("R:")
+        print(R)
+        print("Q^H Q (проверка унитарности):")
+        print(np.round(Q.conj().T @ Q, 14))
+        print("A - Q @ R (норма):", np.linalg.norm(A - Q @ R), "\n")
+
+        print("=== После приведения к вещественной диагонали R ===")
+        print("Q_real:")
+        print(Q_real)
+        print("R_real:")
+        print(R_real)
+
+        # Сравнение с numpy
+        print("\n=== numpy.linalg.qr ===")
+        print("Q_np:")
+        print(Q_np)
+        print("R_np:")
+        print(R_np)
 
     # Проверка совпадения с numpy
     print("\nСравнение с numpy:")
     print("Максимальное отличие Q:", np.max(np.abs(Q_real - Q_np)))
     print("Максимальное отличие R:", np.max(np.abs(R_real - R_np)))
+    print("Макс. отклонение |A-QR|: ", np.max(np.abs(A - Q_real @ R_real)))
+    print("Ошибка в решении Ax=b: ", lsae_rel_err)
+    print("Ошибка A^-1: ", inv_rel_err)
 
-    print("Число операций: ", CNT_GLOB)
+    print("Число операций разложение - измерено: ", CNT_GLOB, " | теория: ", qr_dec_complexity_th(n))
+    print("Число операций СЛАУ - измерено: ", lsae_qr_counts, " | теория: ", qr_lsea_complexity_th(n))
+    print("Число операций инверсия - измерено: ", inv_qr_counts, " | теория: ", qr_inv_complexity_th(n))
 
 
 if __name__ == "__main__":
